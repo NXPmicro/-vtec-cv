@@ -1,0 +1,26 @@
+NXP Software Content Register
+
+Package:                  Computer Vision NXP Edge Processing Software
+Data Created:             2022 March 18
+Type of content:          Source code
+
+-------------------------------------------------------------------------------
+
+Location:                   bin/*
+
+Origin:                     NXP Semiconductors
+Format:                     source code
+Outgoing License:           BSD-3-Clause
+License file:               LICENSES/COPYING.BSD-3-Clause
+
+-------------------------------------------------------------------------------
+
+Location:                   opencv/*
+
+Software Content Register:  opencv/vtec/SW-Content_register.txt
+Package:                    opencv-vtec
+Format:                     source code
+Type of content:            openCV modules
+Description and comments:   i.MX hardware accelerated OpenCV modules
+
+-------------------------------------------------------------------------------
