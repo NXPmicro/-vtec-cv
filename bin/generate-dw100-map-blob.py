@@ -104,6 +104,12 @@ def writeMapToFile(mapping, filename):
             f.write(pack("I", d))
 
 
+def writeMapToYaml(mapping, filename):
+    from yaml import dump
+    with open(filename, 'w') as f:
+        dump(mapping, f, default_flow_style=True)
+
+
 parser = ArgumentParser(description="Generate dewarper map for dw100 device")
 
 parser.add_argument(
@@ -122,6 +128,12 @@ parser.add_argument(
     nargs=2,
     metavar=('width', 'height'),
     default=[640, 480],
+)
+
+parser.add_argument(
+    "--yaml",
+    help="Write mapping table to yaml file",
+    action='store_true'
 )
 
 parser.add_argument(
@@ -217,7 +229,14 @@ for idx, mapping in enumerate(mappings):
     if len(mappings) > 1:
         outputFile += f"-{idx}"
 
-    outputFile += f"-{sw}x{sh}_{dw}x{dh}.bin"
+    outputFile += f"-{sw}x{sh}_{dw}x{dh}"
 
-    writeMapToFile(mapping, outputFile)
+    writeMapToFile(mapping, f"{outputFile}.bin")
     print(f"{usecase} mapping ({sw}x{sh}->{dw}x{dh}) written to {outputFile}")
+
+    if args.yaml:
+        mappingDict = {}
+        mappingDict["input-resolution"] = [sw, sh]
+        mappingDict["output-resolution"] = [dw, dh]
+        mappingDict["mapping"] = mapping
+        writeMapToYaml(mappingDict, f"{outputFile}.yaml")
