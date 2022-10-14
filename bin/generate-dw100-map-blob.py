@@ -32,7 +32,15 @@
 
 import numpy as np
 import cv2 as cv
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentError
+
+
+USECASES = [
+        'identity',
+        'distortion',
+        'fisheye-distortion',
+        'stereo'
+    ]
 
 
 def min(a, b):
@@ -149,21 +157,22 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--calibrationFile",
-    help="Camera calibration file",
-    type=str,
-)
-
-parser.add_argument(
-    "--stereoCalibrationFile",
-    help="Stereo camera calibration file",
-    type=str,
-)
-
-parser.add_argument(
     "--outputFile",
     help="Output file basename",
     )
+
+parser.add_argument(
+    "usecase",
+    help="Camera usecase",
+    choices=USECASES,
+)
+
+calArgs = parser.add_argument(
+    "calibrationFile",
+    help="Camera calibration file",
+    nargs='?',
+    type=str,
+)
 
 args = parser.parse_args()
 
@@ -174,45 +183,52 @@ dw = args.destinationResolution[0]
 dh = args.destinationResolution[1]
 
 cv_file = None
-usecase = "Identity"
 maps = []
 mappings = []
 
-if args.calibrationFile is not None:
-    cv_file = cv.FileStorage()
-    if not cv_file.open(args.calibrationFile, cv.FileStorage_READ):
-        cv_file = None
-    else:
-        M = cv_file.getNode('M').mat()
-        D = cv_file.getNode('D').mat()
-        I = np.identity(3)  # noqa: E741
-        map1, _ = cv.initUndistortRectifyMap(M, D, I, None,
-                                             (dw, dh), cv.CV_32FC2)
-        maps.append(map1)
-        usecase = "Dewarping"
+if not args.calibrationFile and args.usecase != 'identity':
+    raise ArgumentError(calArgs, f"Usecase {args.usecase} requires a calibration file")
 
-if args.stereoCalibrationFile is not None:
-    cv_file = cv.FileStorage()
-    if not cv_file.open(args.stereoCalibrationFile, cv.FileStorage_READ):
-        cv_file = None
-    else:
-        M1 = cv_file.getNode('M1').mat()
-        D1 = cv_file.getNode('D1').mat()
-        P1 = cv_file.getNode('P1').mat()
-        R1 = cv_file.getNode('R1').mat()
-        map1, _ = cv.initUndistortRectifyMap(M1, D1, R1, P1,
-                                             (dw, dh), cv.CV_32FC2)
-        maps.append(map1)
+cv_file = cv.FileStorage()
+if args.calibrationFile:
+    cv_file.open(args.calibrationFile, cv.FileStorage_READ)
 
-        M2 = cv_file.getNode('M2').mat()
-        D2 = cv_file.getNode('D2').mat()
-        P2 = cv_file.getNode('P2').mat()
-        R2 = cv_file.getNode('R2').mat()
-        map2, _ = cv.initUndistortRectifyMap(M2, D2, R2, P2,
-                                             (dw, dh), cv.CV_32FC2)
-        maps.append(map2)
+if args.usecase == 'identity':
+    pass
+elif args.usecase == 'distortion':
+    M = cv_file.getNode('M').mat()
+    D = cv_file.getNode('D').mat()
+    I = np.identity(3)  # noqa: E741
+    map1, _ = cv.initUndistortRectifyMap(M, D, I, None, (dw, dh), cv.CV_32FC2)
+    maps.append(map1)
 
-        usecase = "Stereo rectification"
+elif args.usecase == 'stereo':
+    M1 = cv_file.getNode('M1').mat()
+    D1 = cv_file.getNode('D1').mat()
+    P1 = cv_file.getNode('P1').mat()
+    R1 = cv_file.getNode('R1').mat()
+    map1, _ = cv.initUndistortRectifyMap(M1, D1, R1, P1, (dw, dh), cv.CV_32FC2)
+    maps.append(map1)
+
+    M2 = cv_file.getNode('M2').mat()
+    D2 = cv_file.getNode('D2').mat()
+    P2 = cv_file.getNode('P2').mat()
+    R2 = cv_file.getNode('R2').mat()
+    map2, _ = cv.initUndistortRectifyMap(M2, D2, R2, P2, (dw, dh), cv.CV_32FC2)
+    maps.append(map2)
+
+elif args.usecase == 'fisheye-distortion':
+    D = cv_file.getNode('D').mat()
+    M = cv_file.getNode('M').mat()
+    I = np.identity(3)  # noqa: E741
+    mapx, mapy = cv.fisheye.initUndistortRectifyMap(M, D, I, M, (dw, dh),
+                                                    cv.CV_32FC1)
+    map_ = np.dstack((mapx, mapy))
+    maps.append(map_)
+
+else:
+    raise RuntimeError("Invalid usecase")
+
 
 for mapFull in maps:
     mappings.append(generateDW100Map(sw, sh, dw, dh, mapFull=mapFull))
@@ -221,22 +237,21 @@ if not mappings:
     mappings.append(generateDW100Map(sw, sh, dw, dh))
 
 for idx, mapping in enumerate(mappings):
+    outFile = "map-dw100"
     if args.outputFile is not None:
-        outputFile = args.outputFile
-    else:
-        outputFile = "map-dw100"
+        outFile = args.outputFile
 
     if len(mappings) > 1:
-        outputFile += f"-{idx}"
+        outFile += f"-{idx}"
 
-    outputFile += f"-{sw}x{sh}_{dw}x{dh}"
+    outFile += f"-{sw}x{sh}_{dw}x{dh}"
 
-    writeMapToFile(mapping, f"{outputFile}.bin")
-    print(f"{usecase} mapping ({sw}x{sh}->{dw}x{dh}) written to {outputFile}")
+    writeMapToFile(mapping, f"{outFile}.bin")
+    print(f"{args.usecase} mapping ({sw}x{sh}->{dw}x{dh}) written to {outFile}")  # noqa E501
 
     if args.yaml:
         mappingDict = {}
         mappingDict["input-resolution"] = [sw, sh]
         mappingDict["output-resolution"] = [dw, dh]
         mappingDict["mapping"] = mapping
-        writeMapToYaml(mappingDict, f"{outputFile}.yaml")
+        writeMapToYaml(mappingDict, f"{outFile}.yaml")
