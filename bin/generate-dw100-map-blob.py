@@ -30,6 +30,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from math import pi
 import numpy as np
 import cv2 as cv
 from argparse import ArgumentParser, ArgumentError
@@ -39,6 +40,7 @@ USECASES = [
         'identity',
         'distortion',
         'fisheye-distortion',
+        'fisheye-panorama',
         'stereo'
     ]
 
@@ -186,8 +188,8 @@ cv_file = None
 maps = []
 mappings = []
 
-if not args.calibrationFile and args.usecase != 'identity':
-    raise ArgumentError(calArgs, f"Usecase {args.usecase} requires a calibration file")
+if not args.calibrationFile and (args.usecase != 'identity' and args.usecase != 'fisheye-panorama'):  # noqa:E501
+    raise ArgumentError(calArgs, f"Usecase {args.usecase} requires a calibration file")  # noqa:E501
 
 cv_file = cv.FileStorage()
 if args.calibrationFile:
@@ -224,6 +226,26 @@ elif args.usecase == 'fisheye-distortion':
     mapx, mapy = cv.fisheye.initUndistortRectifyMap(M, D, I, M, (dw, dh),
                                                     cv.CV_32FC1)
     map_ = np.dstack((mapx, mapy))
+    maps.append(map_)
+elif args.usecase == 'fisheye-panorama':
+    center = (sh / 2, sw / 2)
+    w = min(sw, sh)
+    maxRadius = w / 2
+    dwidth = dw
+    dheight = dh
+    rho = np.linspace(0, maxRadius, dheight + 1, dtype=np.float32)
+    phi = np.linspace(0, -2 * pi, dwidth + 1, dtype=np.float32)
+
+    cp = np.cos(phi)
+    sp = np.sin(phi)
+
+    x = np.outer(rho, cp) + center[1]
+    y = np.outer(rho, sp) + center[0]
+
+    # Normalize to follow opencv remap convention which does a 1 -> 1 mapping
+    x *= dw / sw
+    y *= dh / sh
+    map_ = np.dstack((x, y))
     maps.append(map_)
 
 else:
