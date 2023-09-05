@@ -1,7 +1,11 @@
 NXP Software Content Register
 
-Package:                  Computer Vision NXP Edge Processing Software
-Data Created:             2022 March 18
+Package:                  vtec-cv.git
+Description and comments: Computer Vision NXP Edge Processing Software
+Version:                  0.3
+Release Location:         https://github.com/nxp-imx/vtec-cv
+Outgoing License:         BSD-3-Clause
+License file:             LICENSES/COPYING.BSD-3-Clause
 Type of content:          Source code
 
 -------------------------------------------------------------------------------
